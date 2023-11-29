@@ -10,6 +10,9 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters, CallbackContext
 import speech_recognition as sr
 
+from bot.start_handler import start
+from bot.question_command import conv_handler
+
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 API_KEY = os.getenv("CHATGPT_API")
@@ -25,8 +28,8 @@ logging.basicConfig(
 
 
 client = AsyncOpenAI(api_key=API_KEY)
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="I'm a bot, please talk to me!")
+# async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     await context.bot.send_message(chat_id=update.effective_chat.id, text="Hi, what's up?")
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ch = [
@@ -34,6 +37,7 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ]
     response = await chat(MSGS=ch, MaxToken=500, outputs=3)
     await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
+
 
 async def audio(update: Update, context: CallbackContext) -> None:
     file = await context.bot.get_file(update.message.voice)
@@ -73,13 +77,15 @@ async def chat(MSGS: list, MaxToken: int=50, outputs: int=3) -> str:
 if __name__ == '__main__':
     application = ApplicationBuilder().token(TOKEN).build()
     start_handler = CommandHandler('start', start)
-    echo_handler = MessageHandler(filters.TEXT & (~filters.COMMAND), echo)
-    audio_handler = MessageHandler(filters.VOICE & ~filters.COMMAND, audio)
+    # question_handler = CommandHandler("question", conv_handler)
+    # echo_handler = MessageHandler(filters.TEXT & (~filters.COMMAND), echo)
+    # audio_handler = MessageHandler(filters.VOICE & ~filters.COMMAND, audio)
 
     application.add_handler(start_handler)
-    application.add_handler(echo_handler)
-    application.add_handler(audio_handler)
-    application.run_polling()
+    # application.add_handler(echo_handler)
+    application.add_handler(conv_handler)
+    # application.add_handler(question_handler)
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 
