@@ -34,7 +34,7 @@ import whisper
 import warnings
 
 
-from utilities import getOpenAiClient, chat
+from bot.utilities import getOpenAiClient, chat
 
 # Enable logging
 logging.basicConfig(
@@ -52,7 +52,13 @@ SELECTING_LEVEL, SELECTING_GENDER = map(chr, range(4, 6))
 # State definitions for descriptions conversation
 SELECTING_FEATURE, TYPING = map(chr, range(6, 8))
 # Meta states
-STOPPING, SHOWING, SHOWING_TRANSCRIPTION, SHOWING_TRANSCRIPTION_SUMMARY = map(chr, range(8, 12))
+STOPPING, SHOWING = map(chr, range(8, 10))
+
+# Question variable
+SHOWING_TRANSCRIPTION_GIVE_COMMAND, \
+    SHOWING_TRANSCRIPTION_EXECUTION, \
+    SHOWING_TRANSCRIPTION, \
+    SHOWING_TRANSCRIPTION_SUMMARY = map(chr, range(10, 14))
 # Shortcut for ConversationHandler.END
 END = ConversationHandler.END
 
@@ -130,7 +136,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
 
 
 async def get_question_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
-    print("herer")
     file = await context.bot.get_file(update.message.voice)
     file.download_to_drive(os.path.join(dataDirPath, "user_audio.ogg"))
     warnings.simplefilter("ignore")
@@ -141,6 +146,7 @@ async def get_question_audio(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 async def get_question_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    processing_message = await context.bot.send_message(chat_id=update.effective_chat.id, text="Processing your message...")
     if not ("transcription" in context.user_data.keys()):
         message = update.message
         # Check if the last message was a text message
@@ -157,6 +163,7 @@ async def get_question_text(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             # print(result)
         else:
             text = "Please try to send a voice or a text question!!"
+            context.bot.delete_message(message_id=processing_message.message_id)
             await update.message.reply_text(text=text)
             return QUESTION
 
@@ -167,13 +174,13 @@ async def get_question_text(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             InlineKeyboardButton(text="Forward Message", callback_data=str(SHOWING_TRANSCRIPTION_SUMMARY)),
         ],
         [
-            InlineKeyboardButton(text="Transcription + summary", callback_data=str(ADDING_SELF)),
+            InlineKeyboardButton(text="Transcription + summary", callback_data=str(SHOWING_TRANSCRIPTION_SUMMARY)),
         ],
         [
-            InlineKeyboardButton(text="Transcription + execution", callback_data=str(SHOWING)),
+            InlineKeyboardButton(text="Transcription + execution", callback_data=str(SHOWING_TRANSCRIPTION_EXECUTION)),
         ],
         [
-            InlineKeyboardButton(text="Transcription + give command", callback_data=str(END)),
+            InlineKeyboardButton(text="Transcription + give command", callback_data=str(SHOWING_TRANSCRIPTION_GIVE_COMMAND)),
         ],
         [
             InlineKeyboardButton(text="END", callback_data=str(END)),
@@ -182,6 +189,7 @@ async def get_question_text(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     keyboard = InlineKeyboardMarkup(buttons)
     text = "Got it! Please select your Choice."
 
+    await context.bot.delete_message(chat_id=update.effective_chat.id,message_id=processing_message.message_id)
     if context.user_data.get(START_OVER):
         await update.callback_query.answer()
         await update.callback_query.edit_message_text(text=text, reply_markup=keyboard)
@@ -228,7 +236,9 @@ async def show_transcription_summary(update: Update, context:ContextTypes.DEFAUL
     if context.user_data["transcription"]:
         question = "YOUR TRANSCRIPTION IS :\n\t" + str(context.user_data["transcription"])
         if "summary" not in context.user_data.keys():
-            summary = chat(MSGS=[{"role": "user", "content": f"Please summarize the following text:\n{question}"}], MaxToken=500, client=client)
+            summary = chat(MSGS=[{"role": "user", "content": f"Please summarize the following text:\n{question}"}],
+                           MaxToken=500,
+                           client=client)
             context.user_data["summary"] = summary
         else:
             summary = context.user_data["summary"]
@@ -245,6 +255,30 @@ async def show_transcription_summary(update: Update, context:ContextTypes.DEFAUL
     await update.callback_query.edit_message_text(text=question, reply_markup=keyboard)
     user_data[START_OVER] = True
     return SHOWING_TRANSCRIPTION_SUMMARY
+
+
+async def show_transcription_execution(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    text = "not working yet..."
+    buttons = [[InlineKeyboardButton(text="Back", callback_data=str(END))]]
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text(text=text, reply_markup=keyboard)
+    # user_data[START_OVER] = True
+    return SHOWING_TRANSCRIPTION_EXECUTION
+
+
+async def show_transcription_give_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    text = "not working yet..."
+    buttons = [[InlineKeyboardButton(text="Back", callback_data=str(END))]]
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text(text=text, reply_markup=keyboard)
+    # user_data[START_OVER] = True
+    return SHOWING_TRANSCRIPTION_GIVE_COMMAND
+
+
 async def show_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
     """Pretty print gathered data."""
     def pretty_print(data: Dict[str, Any], level: str) -> str:
@@ -486,6 +520,8 @@ selection_handlers = [
     CallbackQueryHandler(show_data, pattern="^" + str(SHOWING) + "$"),
     CallbackQueryHandler(show_transcription, pattern="^" + str(SHOWING_TRANSCRIPTION) + "$"),
     CallbackQueryHandler(show_transcription_summary, pattern="^" + str(SHOWING_TRANSCRIPTION_SUMMARY) + "$"),
+    CallbackQueryHandler(show_transcription_execution, pattern="^" + str(SHOWING_TRANSCRIPTION_EXECUTION) + "$"),
+    CallbackQueryHandler(show_transcription_give_command, pattern="^" + str(SHOWING_TRANSCRIPTION_GIVE_COMMAND) + "$"),
     CallbackQueryHandler(adding_self, pattern="^" + str(ADDING_SELF) + "$"),
     CallbackQueryHandler(end, pattern="^" + str(END) + "$"),
 ]
@@ -495,6 +531,8 @@ conv_handler = ConversationHandler(
         SHOWING: [CallbackQueryHandler(start, pattern="^" + str(END) + "$")],
         SHOWING_TRANSCRIPTION: [CallbackQueryHandler(get_question_text, pattern="^" + str(END) + "$")],
         SHOWING_TRANSCRIPTION_SUMMARY: [CallbackQueryHandler(get_question_text, pattern="^" + str(END) + "$")],
+        SHOWING_TRANSCRIPTION_EXECUTION: [CallbackQueryHandler(get_question_text, pattern="^" + str(END) + "$")],
+        SHOWING_TRANSCRIPTION_GIVE_COMMAND: [CallbackQueryHandler(get_question_text, pattern="^" + str(END) + "$")],
         SELECTING_ACTION: selection_handlers,
         SELECTING_LEVEL: selection_handlers,
         DESCRIBING_SELF: [description_conv],
