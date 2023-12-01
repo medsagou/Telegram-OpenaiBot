@@ -248,7 +248,7 @@ async def show_transcription_summary(update: Update, context:ContextTypes.DEFAUL
     if context.user_data["transcription"]:
         question = "YOUR TRANSCRIPTION IS :\n\t" + str(context.user_data["transcription"])
         if "summary" not in context.user_data.keys():
-            summary = chat(MSGS=[{"role": "user", "content": f"Please summarize the following text:\n{question}"}],
+            summary = await chat(MSGS=[{"role": "user", "content": f"Please summarize the following text:\n{question}"}],
                            MaxToken=500,
                            client=client)
             context.user_data["summary"] = summary
