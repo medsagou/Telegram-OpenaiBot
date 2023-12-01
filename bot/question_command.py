@@ -27,6 +27,7 @@ from telegram.ext import (
     ConversationHandler,
     MessageHandler,
     filters,
+    CallbackContext,
 )
 
 
@@ -144,10 +145,19 @@ async def get_question_audio(update: Update, context: ContextTypes.DEFAULT_TYPE)
     context.user_data["question"] = result["text"]
     return TRANSCRIPTION
 
+import time
+import asyncio
+async def update_dots(message):
+    dots = 0
+    while True:
+        dots = (dots + 1) % 4  # Cycling through 0, 1, 2, 3 for dot animations
+        await message.edit_text("Processing" + "." * dots)
+        await asyncio.sleep(1)
 
 async def get_question_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
-    processing_message = await context.bot.send_message(chat_id=update.effective_chat.id, text="Processing your message...")
     if not ("transcription" in context.user_data.keys()):
+        processing_message = await context.bot.send_message(chat_id=update.effective_chat.id, text="Processing your message...")
+        # sticker = await context.bot.send_sticker(chat_id=update.effective_chat.id, sticker=os.path.join(dataDirPath, "891885078961979560.tgs"))
         message = update.message
         # Check if the last message was a text message
         if message.text:
@@ -163,9 +173,11 @@ async def get_question_text(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             # print(result)
         else:
             text = "Please try to send a voice or a text question!!"
-            context.bot.delete_message(message_id=processing_message.message_id)
+            await context.bot.delete_message(chat_id=update.effective_chat.id,message_id=processing_message.message_id)
             await update.message.reply_text(text=text)
             return QUESTION
+
+        await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=processing_message.message_id)
 
 
     buttons = [
@@ -189,7 +201,7 @@ async def get_question_text(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     keyboard = InlineKeyboardMarkup(buttons)
     text = "Got it! Please select your Choice."
 
-    await context.bot.delete_message(chat_id=update.effective_chat.id,message_id=processing_message.message_id)
+    # await context.bot.delete_message(chat_id=update.effective_chat.id,message_id=processing_message.message_id)
     if context.user_data.get(START_OVER):
         await update.callback_query.answer()
         await update.callback_query.edit_message_text(text=text, reply_markup=keyboard)
@@ -264,7 +276,7 @@ async def show_transcription_execution(update: Update, context: ContextTypes.DEF
 
     await update.callback_query.answer()
     await update.callback_query.edit_message_text(text=text, reply_markup=keyboard)
-    # user_data[START_OVER] = True
+    context.user_data[START_OVER] = True
     return SHOWING_TRANSCRIPTION_EXECUTION
 
 
@@ -275,7 +287,7 @@ async def show_transcription_give_command(update: Update, context: ContextTypes.
 
     await update.callback_query.answer()
     await update.callback_query.edit_message_text(text=text, reply_markup=keyboard)
-    # user_data[START_OVER] = True
+    context.user_data[START_OVER] = True
     return SHOWING_TRANSCRIPTION_GIVE_COMMAND
 
 
@@ -324,11 +336,15 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def end(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """End conversation from InlineKeyboardButton."""
+    user_data = context.user_data
     await update.callback_query.answer()
 
     text = "See you around!"
     await update.callback_query.edit_message_text(text=text)
-
+    clear = ["transcription", "summary"]
+    for key in clear:
+        if user_data.get(key) is not None:
+            context.user_data.pop(key)
     return END
 
 
